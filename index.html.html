@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Новые вкладки // Monochrome OS</title>
+  <style>
+    :root {
+      --bg: #0a0a0c; --card: rgba(20,20,24,0.78); --border: rgba(255,255,255,0.14);
+      --border-h: rgba(255,255,255,0.45); --text: #f4f4f6; --muted: #8e8e98;
+      --acc: #ffffff; --acc-inv: #0a0a0c;
+    }
+    body.theme-oled {
+      --bg: #000000; --card: rgba(8,8,8,0.92); --border: rgba(255,255,255,0.28);
+      --border-h: #ffffff; --text: #ffffff; --muted: #999999; --acc: #ffffff; --acc-inv: #000000;
+    }
+    body.theme-light {
+      --bg: #ebebef; --card: rgba(255,255,255,0.85); --border: rgba(0,0,0,0.15);
+      --border-h: rgba(0,0,0,0.5); --text: #111113; --muted: #5a5a64; --acc: #111113; --acc-inv: #ffffff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh; overflow-x: hidden; transition: background 0.3s, color 0.3s;
+    }
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    .container { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 18px 24px 34px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: var(--card); backdrop-filter: blur(18px); border: 1px solid var(--border); border-radius: 16px; padding: 18px 22px; box-shadow: 0 12px 34px rgba(0,0,0,0.6); transition: border-color 0.2s; }
+    .card:hover { border-color: var(--border-h); }
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; border-radius: 999px; }
+    .sys-status { display: flex; align-items: center; gap: 10px; font-size: 12px; font-family: monospace; letter-spacing: 1px; color: var(--muted); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 8px var(--acc); }
+    .btn { background: transparent; color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.18s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:hover, .btn.active { background: var(--acc); color: var(--acc-inv); border-color: var(--acc); }
+    .grid-2 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
+    .time { font-size: 60px; font-weight: 800; letter-spacing: -2px; line-height: 1; font-variant-numeric: tabular-nums; }
+    .sec { font-size: 24px; color: var(--muted); font-weight: 500; margin-left: 6px; }
+    .greet { margin-top: 8px; font-size: 16px; color: var(--muted); }
+    .uname { color: var(--text); font-weight: 700; border-bottom: 1px dashed var(--border-h); cursor: pointer; }
+    .w-temp { font-size: 42px; font-weight: 800; margin: 6px 0; }
+    .w-meta { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 8px; }
+    .search-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .search-box { display: flex; align-items: center; gap: 10px; background: rgba(128,128,128,0.08); border: 1px solid var(--border); border-radius: 12px; padding: 8px 12px; }
+    .search-box input { width: 100%; background: transparent; border: none; outline: none; color: var(--text); font-size: 15px; }
+
+    /* ИКОНКИ ИЗБРАННЫХ САЙТОВ */
+    .links-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; margin-top: 12px; }
+    .tile { position: relative; display: flex; align-items: center; gap: 10px; padding: 11px 12px; background: rgba(128,128,128,0.06); border: 1px solid var(--border); border-radius: 12px; color: var(--text); text-decoration: none; font-size: 13px; font-weight: 600; transition: 0.2s; overflow: hidden; }
+    .tile:hover { background: var(--acc); color: var(--acc-inv); transform: translateY(-2px); border-color: var(--acc); }
+    .t-ico-box { width: 28px; height: 28px; border-radius: 7px; background: rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; border: 1px solid var(--border); }
+    .t-ico-img { width: 18px; height: 18px; object-fit: contain; filter: grayscale(100%) contrast(1.2); transition: filter 0.2s; }
+    .tile:hover .t-ico-img { filter: grayscale(0%); }
+    .t-del { position: absolute; top: 3px; right: 5px; background: none; border: none; color: inherit; cursor: pointer; opacity: 0; font-size: 12px; padding: 2px 4px; }
+    .tile:hover .t-del { opacity: 0.75; }
+
+    /* SPOTIFY RU ПЛЕЕР (БЕЗ VPN) */
+    .sp-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .sp-brand { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 14px; letter-spacing: 0.5px; }
+    .sp-radios { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+    .sp-search { display: flex; gap: 6px; margin-bottom: 10px; }
+    .sp-inp { flex: 1; background: rgba(128,128,128,0.09); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 12.5px; outline: none; }
+    .sp-inp:focus { border-color: var(--acc); }
+    .sp-now { display: flex; align-items: center; gap: 12px; padding: 10px; background: rgba(128,128,128,0.07); border: 1px solid var(--border); border-radius: 12px; }
+    .sp-art { width: 52px; height: 52px; border-radius: 8px; object-fit: cover; filter: grayscale(100%) contrast(1.15); border: 1px solid var(--border-h); flex-shrink: 0; background: #18181c; }
+    .sp-meta { flex: 1; min-width: 0; }
+    .sp-title { font-size: 13.5px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sp-artist { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sp-bar { display: flex; align-items: center; gap: 8px; margin: 10px 0 8px; font-family: monospace; font-size: 11px; color: var(--muted); }
+    .sp-range { flex: 1; accent-color: var(--acc); height: 4px; cursor: pointer; }
+    .sp-ctrl { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .sp-btns { display: flex; align-items: center; gap: 8px; }
+    .sp-cbtn { background: transparent; border: 1px solid var(--border); color: var(--text); width: 30px; height: 30px; border-radius: 50%; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.15s; }
+    .sp-cbtn:hover { background: var(--acc); color: var(--acc-inv); }
+    .sp-play { width: 38px; height: 38px; border-radius: 50%; background: var(--acc); color: var(--acc-inv); border: none; font-size: 14px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .sp-list { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px; }
+    .sp-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 12px; color: var(--muted); cursor: pointer; border: 1px solid transparent; }
+    .sp-item:hover { background: rgba(128,128,128,0.1); color: var(--text); }
+    .sp-item.active { background: rgba(128,128,128,0.18); color: var(--text); border-color: var(--border-h); font-weight: 700; }
+
+    /* ЗАДАЧИ И МОДАЛКИ */
+    .todo-list { list-style: none; max-height: 210px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+    .todo-item { display: flex; justify-content: space-between; padding: 8px 10px; background: rgba(128,128,128,0.06); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; }
+    .todo-item.done span { text-decoration: line-through; color: var(--muted); }
+    .notes { display: none; width: 100%; height: 240px; margin-top: 10px; background: rgba(128,128,128,0.06); border: 1px solid var(--border); border-radius: 10px; padding: 10px; color: var(--text); resize: none; outline: none; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; z-index: 99; }
+    .modal.open { display: flex; }
+    .modal-c { background: var(--bg); border: 1px solid var(--border-h); border-radius: 16px; padding: 22px; width: 90%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+    @media (max-width: 820px) { .grid-2 { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <canvas id="bg-canvas"></canvas>
+  <div class="container">
+    <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+    <header class="card topbar">
+      <div class="sys-status"><span class="dot"></span><span id="date-str">MONOCHROME OS</span></div>
+      <button type="button" class="btn" id="cfg-open">⚙ Настройки ЧБ</button>
+    </header>
+
+    <!-- ЧАСЫ И РАБОЧАЯ ПОГОДА (°C) -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="time"><span id="c-hm">00:00</span><span class="sec" id="c-s">00</span></div>
+        <div class="greet"><span id="g-txt">Добрый вечер,</span> <span class="uname" id="u-name">Михаил</span></div>
+      </div>
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--muted);">
+          <span id="w-city" style="cursor:pointer; border-bottom:1px dashed var(--border-h); color:var(--text); font-weight:600;">📍 Вологда ✎</span>
+          <button type="button" class="btn" id="w-ref" style="padding:2px 8px; font-size:11px;">↻ °C</button>
+        </div>
+        <div class="w-temp" id="w-temp">--°C</div>
+        <div class="w-meta"><span id="w-cond">Обновление...</span><span id="w-wind">Ветер: -- м/с</span></div>
+      </div>
+    </section>
+
+    <!-- УМНЫЙ ПОИСК -->
+    <section class="card">
+      <div class="search-row" id="s-tabs">
+        <button type="button" class="btn active" data-u="https://www.google.com/search?q=">Google</button>
+        <button type="button" class="btn" data-u="https://www.youtube.com/results?search_query=">YouTube</button>
+        <button type="button" class="btn" data-u="https://ya.ru/search/?text=">Яндекс</button>
+        <button type="button" class="btn" data-u="https://ru.wikipedia.org/w/index.php?search=">Википедия</button>
+        <button type="button" class="btn" data-u="https://modrinth.com/mods?q=">Modrinth</button>
+      </div>
+      <form id="s-form" class="search-box">
+        <span>🔍</span>
+        <input type="text" id="s-inp" placeholder="Введи запрос и нажми Enter (или клавишу /)..." autocomplete="off" />
+        <button type="submit" class="btn">Найти</button>
+      </form>
+    </section>
+
+    <!-- БЫСТРЫЕ ССЫЛКИ С ИКОНКАМИ -->
+    <section class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:1px;">Избранные сайты</span>
+        <button type="button" class="btn" id="add-link-btn">+ Добавить сайт</button>
+      </div>
+      <div class="links-grid" id="links-grid"></div>
+    </section>
+
+    <!-- SPOTIFY RU (БЕЗ VPN) + ЗАДАЧИ -->
+    <section class="grid-2">
+      <div class="card">
+        <div class="sp-top">
+          <div class="sp-brand">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.52 17.34c-.24.36-.66.48-1.02.24-2.82-1.74-6.36-2.1-10.56-1.14-.42.12-.78-.18-.9-.54-.12-.42.18-.78.54-.9 4.56-1.02 8.52-.6 11.64 1.32.42.18.48.66.3 1.02zm1.44-3.3c-.3.42-.84.6-1.26.3-3.24-1.98-8.16-2.58-11.94-1.38-.48.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14 4.32-1.32 9.72-.66 13.44 1.62.36.18.54.78.3 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.3c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.26-1.26 11.28-1.02 15.72 1.62.54.3.72 1.02.42 1.56-.3.42-1.02.6-1.56.3z"/></svg>
+            <span>SPOTIFY RU // БЕЗ VPN</span>
+          </div>
+          <label class="btn" style="cursor:pointer;">
+            📂 + MP3
+            <input type="file" id="sp-file" accept="audio/*" multiple style="display:none" />
+          </label>
+        </div>
+
+        <!-- Бесконечные радио-потоки 24/7 (Полные треки без VPN в РФ) -->
+        <div class="sp-radios">
+          <button type="button" class="btn" data-stream="https://radiorecord.hostingradio.ru/phonk96.aacp" data-t="PHONK LIVE 24/7" data-a="Полный поток // Без VPN">🔥 Phonk 24/7</button>
+          <button type="button" class="btn" data-stream="https://radiorecord.hostingradio.ru/synth96.aacp" data-t="SYNTHWAVE 24/7" data-a="Retrowave // Без VPN">🌆 Synthwave</button>
+          <button type="button" class="btn" data-stream="https://radiorecord.hostingradio.ru/cyb96.aacp" data-t="CYBERPUNK 24/7" data-a="Dark Electro // Без VPN">⚡ Cyberpunk</button>
+          <button type="button" class="btn" data-stream="https://radiorecord.hostingradio.ru/lofi96.aacp" data-t="LO-FI CHILL 24/7" data-a="Beats // Без VPN">☕ Lo-Fi</button>
+          <button type="button" class="btn" data-stream="https://radio.plaza.one/mp3" data-t="NIGHTWAVE PLAZA" data-a="Vaporwave // Без VPN">🌙 Plaza</button>
+        </div>
+
+        <!-- Поиск реальных песен и артистов -->
+        <form class="sp-search" id="sp-sform">
+          <input type="text" id="sp-sinp" class="sp-inp" placeholder="Найти трек или артиста (DVRST, Kordhell, Кино, Молчат Дома)..." />
+          <button type="submit" class="btn">Найти</button>
+        </form>
+
+        <!-- Текущий трек с обложкой -->
+        <div class="sp-now">
+          <img id="sp-img" class="sp-art" src="https://favicon.yandex.net/favicon/v2/https://open.spotify.com?size=120" alt="cover" />
+          <div class="sp-meta">
+            <div class="sp-title" id="sp-title">Загрузка треков...</div>
+            <div class="sp-artist" id="sp-artist">Spotify Direct Stream</div>
+          </div>
+        </div>
+
+        <!-- Дорожка времени -->
+        <div class="sp-bar">
+          <span id="sp-cur">0:00</span>
+          <input type="range" class="sp-range" id="sp-seek" min="0" max="100" value="0" />
+          <span id="sp-dur">0:30</span>
+        </div>
+
+        <!-- Кнопки плеера -->
+        <div class="sp-ctrl">
+          <div class="sp-btns">
+            <button type="button" class="sp-cbtn" id="sp-prev" title="Предыдущий">⏮</button>
+            <button type="button" class="sp-play" id="sp-play" title="Пуск / Пауза">▶</button>
+            <button type="button" class="sp-cbtn" id="sp-next" title="Следующий">⏭</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:12px;">🔊</span>
+            <input type="range" class="sp-range" id="sp-vol" min="0" max="1" step="0.02" value="0.7" style="width:75px;" />
+          </div>
+        </div>
+
+        <!-- Список найденных реальных треков -->
+        <div class="sp-list" id="sp-list"></div>
+      </div>
+
+      <!-- ЗАДАЧИ И ЗАМЕТКИ -->
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn active" id="t-todo">✓ Задачи</button>
+            <button type="button" class="btn" id="t-notes">✎ Заметки</button>
+          </div>
+          <span id="todo-cnt" style="font-size:12px; color:var(--muted);">0 активных</span>
+        </div>
+        <div id="v-todo" style="margin-top:10px;">
+          <form id="todo-f" style="display:flex; gap:6px;">
+            <input type="text" id="todo-i" class="sp-inp" placeholder="Новая задача..." />
+            <button type="submit" class="btn">+</button>
+          </form>
+          <ul class="todo-list" id="todo-l"></ul>
+        </div>
+        <textarea id="v-notes" class="notes" placeholder="Быстрые заметки (сохраняются автоматически)..."></textarea>
+      </div>
+    </section>
+  </div>
+
+  <!-- МОДАЛКА ДОБАВЛЕНИЯ САЙТА -->
+  <div class="modal" id="link-modal">
+    <div class="modal-c">
+      <div style="font-weight:700; font-size:16px;">Добавить сайт с иконкой</div>
+      <input type="text" id="l-title-inp" class="sp-inp" placeholder="Название (например, YouTube)" />
+      <input type="text" id="l-url-inp" class="sp-inp" placeholder="Ссылка (https://...)" value="https://" />
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button type="button" class="btn" id="l-cancel">Отмена</button>
+        <button type="button" class="btn active" id="l-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- МОДАЛКА НАСТРОЕК -->
+  <div class="modal" id="cfg-modal">
+    <div class="modal-c">
+      <div style="font-weight:700; font-size:16px;">Настройки ЧБ системы</div>
+      <div style="font-size:12px; color:var(--muted);">Тема оформления</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button type="button" class="btn" data-th="default">Графит</button>
+        <button type="button" class="btn" data-th="oled">OLED ЧБ</button>
+        <button type="button" class="btn" data-th="light">Светлая</button>
+      </div>
+      <div style="font-size:12px; color:var(--muted);">Анимация фона</div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button type="button" class="btn" data-bg="particles">Частицы</button>
+        <button type="button" class="btn" data-bg="rain">Дождь</button>
+        <button type="button" class="btn" data-bg="none">Чистый</button>
+      </div>
+      <button type="button" class="btn active" id="cfg-close" style="align-self:flex-end;">Готово</button>
+    </div>
+  </div>
+
+  <script>
+    // 1. ЧАСЫ И ИМЯ
+    const uName = document.getElementById('u-name');
+    uName.textContent = localStorage.getItem('m_user') || 'Михаил';
+    uName.onclick = () => {
+      const n = prompt('Как к тебе обращаться?', uName.textContent);
+      if (n) { uName.textContent = n; localStorage.setItem('m_user', n); }
+    };
+    function tick() {
+      const d = new Date();
+      document.getElementById('c-hm').textContent = d.toTimeString().slice(0,5);
+      document.getElementById('c-s').textContent = d.toTimeString().slice(6,8);
+      const h = d.getHours();
+      document.getElementById('g-txt').textContent = h < 5 ? 'Доброй ночи,' : h < 12 ? 'Доброе утро,' : h < 17 ? 'Добрый день,' : 'Добрый вечер,';
+      document.getElementById('date-str').textContent = 'MONOCHROME OS // ' + d.toLocaleDateString('ru-RU', {weekday:'short', day:'numeric', month:'long'}).toUpperCase();
+    }
+    setInterval(tick, 1000); tick();
+
+    // 2. НАДЁЖНАЯ ПОГОДА В ЦЕЛЬСИЯХ (°C) — 3 РЕЗЕРВНЫХ СЕРВЕРА ДЛЯ РФ
+    let wLoc = JSON.parse(localStorage.getItem('m_wloc')) || { name: 'Вологда', lat: 59.2239, lon: 39.8840 };
+
+    async function loadW() {
+      document.getElementById('w-city').textContent = '📍 ' + wLoc.name + ' ✎';
+      document.getElementById('w-cond').textContent = 'Обновление...';
+
+      // Попытка 1: wttr.in (отлично работает в РФ без VPN)
+      try {
+        const r1 = await fetch(`https://wttr.in/${encodeURIComponent(wLoc.name)}?format=j1&lang=ru`);
+        if (r1.ok) {
+          const j1 = await r1.json();
+          const cur = j1.current_condition[0];
+          const t = parseInt(cur.temp_C, 10);
+          const desc = (cur.lang_ru && cur.lang_ru[0]) ? cur.lang_ru[0].value : cur.weatherDesc[0].value;
+          const windMs = Math.round(parseFloat(cur.windspeedKmph) / 3.6);
+          document.getElementById('w-temp').textContent = (t > 0 ? '+' : '') + t + '°C';
+          document.getElementById('w-cond').textContent = desc;
+          document.getElementById('w-wind').textContent = 'Ветер: ' + windMs + ' м/с';
+          return;
+        }
+      } catch(e) {}
+
+      // Попытка 2: Норвежский метеосервер Met.no (глобальный доступ без блокировок)
+      try {
+        const r2 = await fetch(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${wLoc.lat}&lon=${wLoc.lon}`);
+        if (r2.ok) {
+          const j2 = await r2.json();
+          const det = j2.properties.timeseries[0].data.instant.details;
+          const t = Math.round(det.air_temperature);
+          document.getElementById('w-temp').textContent = (t > 0 ? '+' : '') + t + '°C';
+          document.getElementById('w-cond').textContent = 'Актуально (Met)';
+          document.getElementById('w-wind').textContent = 'Ветер: ' + Math.round(det.wind_speed) + ' м/с';
+          return;
+        }
+      } catch(e) {}
+
+      // Попытка 3: Open-Meteo
+      try {
+        const r3 = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${wLoc.lat}&longitude=${wLoc.lon}&current_weather=true&windspeed_unit=ms`);
+        const j3 = await r3.json();
+        const cw = j3.current_weather;
+        const t = Math.round(cw.temperature);
+        document.getElementById('w-temp').textContent = (t > 0 ? '+' : '') + t + '°C';
+        document.getElementById('w-cond').textContent = cw.weathercode === 0 ? 'Ясно ☀' : 'Облачно ☁';
+        document.getElementById('w-wind').textContent = 'Ветер: ' + Math.round(cw.windspeed) + ' м/с';
+      } catch(e) {
+        document.getElementById('w-cond').textContent = 'Нет сети';
+      }
+    }
+
+    document.getElementById('w-ref').onclick = loadW;
+    document.getElementById('w-city').onclick = async () => {
+      const q = prompt('Введи название города:', wLoc.name);
+      if (!q || !q.trim()) return;
+      wLoc.name = q.trim();
+      try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(wLoc.name)}&limit=1`);
+        const j = await r.json();
+        if (j && j[0]) {
+          wLoc.lat = parseFloat(j[0].lat);
+          wLoc.lon = parseFloat(j[0].lon);
+        }
+      } catch(e) {}
+      localStorage.setItem('m_wloc', JSON.stringify(wLoc));
+      loadW();
+    };
+    loadW();
+
+    // 3. ПОИСК
+    let sUrl = 'https://www.google.com/search?q=';
+    document.querySelectorAll('#s-tabs .btn').forEach(b => b.onclick = () => {
+      document.querySelectorAll('#s-tabs .btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active'); sUrl = b.dataset.u; document.getElementById('s-inp').focus();
+    });
+    document.getElementById('s-form').onsubmit = e => {
+      e.preventDefault();
+      const v = document.getElementById('s-inp').value.trim();
+      if (v) window.location.href = sUrl + encodeURIComponent(v);
+    };
+    window.addEventListener('keydown', e => {
+      if (e.key === '/' && !['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) {
+        e.preventDefault(); document.getElementById('s-inp').focus();
+      }
+    });
+
+    // 4. ИЗБРАННЫЕ САЙТЫ С РЕАЛЬНЫМИ ИКОНКАМИ (ЧЕРЕЗ ЯНДЕКС FAVICON API — РАБОТАЕТ В РФ)
+    let links = JSON.parse(localStorage.getItem('m_links')) || [
+      { t: 'YouTube', u: 'https://www.youtube.com' },
+      { t: 'Roblox', u: 'https://www.roblox.com/home' },
+      { t: 'Modrinth', u: 'https://modrinth.com' },
+      { t: 'ВКонтакте', u: 'https://vk.com' },
+      { t: 'Переводчик', u: 'https://translate.google.com' },
+      { t: 'Gmail', u: 'https://mail.google.com' }
+    ];
+
+    function getFaviconUrl(url) {
+      try {
+        const host = new URL(url).origin;
+        return `https://favicon.yandex.net/favicon/v2/${host}?size=32`;
+      } catch(e) {
+        return `https://www.google.com/s2/favicons?sz=64&domain_url=${encodeURIComponent(url)}`;
+      }
+    }
+
+    function drawLinks() {
+      const g = document.getElementById('links-grid'); g.innerHTML = '';
+      links.forEach((l, i) => {
+        const a = document.createElement('a'); a.className = 'tile'; a.href = l.u;
+        const icoUrl = getFaviconUrl(l.u);
+        a.innerHTML = `
+          <span class="t-ico-box">
+            <img class="t-ico-img" src="${icoUrl}" alt="" onerror="this.style.display='none'; this.parentElement.textContent='${l.t[0].toUpperCase()}'" />
+          </span>
+          <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${l.t}</span>
+          <button type="button" class="t-del" title="Удалить">✕</button>
+        `;
+        a.querySelector('.t-del').onclick = e => {
+          e.preventDefault(); e.stopPropagation();
+          links.splice(i,1); localStorage.setItem('m_links', JSON.stringify(links)); drawLinks();
+        };
+        g.appendChild(a);
+      });
+    }
+
+    const lModal = document.getElementById('link-modal');
+    document.getElementById('add-link-btn').onclick = () => {
+      document.getElementById('l-title-inp').value = '';
+      document.getElementById('l-url-inp').value = 'https://';
+      lModal.classList.add('open');
+    };
+    document.getElementById('l-cancel').onclick = () => lModal.classList.remove('open');
+    document.getElementById('l-save').onclick = () => {
+      const t = document.getElementById('l-title-inp').value.trim();
+      let u = document.getElementById('l-url-inp').value.trim();
+      if (!t || !u) return;
+      if (!u.startsWith('http')) u = 'https://' + u;
+      links.push({ t, u }); localStorage.setItem('m_links', JSON.stringify(links));
+      drawLinks(); lModal.classList.remove('open');
+    };
+    drawLinks();
+
+    // 5. РЕАЛЬНЫЙ SPOTIFY ПЛЕЕР (ПОИСК РЕАЛЬНЫХ ТРЕКОВ + 24/7 РАДИО БЕЗ VPN В РФ)
+    const audio = new Audio();
+    audio.crossOrigin = 'anonymous';
+    audio.volume = 0.7;
+
+    let playlist = [];
+    let curIdx = 0;
+    let isLiveStream = false;
+
+    const playBtn = document.getElementById('sp-play');
+    const titleEl = document.getElementById('sp-title');
+    const artistEl = document.getElementById('sp-artist');
+    const imgEl = document.getElementById('sp-img');
+    const curEl = document.getElementById('sp-cur');
+    const durEl = document.getElementById('sp-dur');
+    const seekEl = document.getElementById('sp-seek');
+    const listEl = document.getElementById('sp-list');
+
+    function fmt(s) {
+      if (!isFinite(s) || s < 0) return 'LIVE';
+      s = Math.floor(s);
+      return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+    }
+
+    // Поиск настоящих песен через открытый музыкальный каталог (работает в РФ без VPN)
+    async function searchRealMusic(query) {
+      listEl.innerHTML = '<div style="font-size:12px; color:var(--muted); padding:6px;">Загрузка реальных треков...</div>';
+      try {
+        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=15&country=ru`);
+        const data = await res.json();
+        if (data.results && data.results.length > 0) {
+          playlist = data.results.map(item => ({
+            title: item.trackName,
+            artist: item.artistName,
+            url: item.previewUrl,
+            cover: item.artworkUrl100.replace('100x100', '200x200')
+          }));
+          curIdx = 0;
+          loadTrack(0, false);
+          renderList();
+        } else {
+          listEl.innerHTML = '<div style="font-size:12px; color:var(--muted); padding:6px;">Ничего не найдено</div>';
+        }
+      } catch (e) {
+        listEl.innerHTML = '<div style="font-size:12px; color:var(--muted); padding:6px;">Ошибка сети. Включи поток 24/7 сверху!</div>';
+      }
+    }
+
+    function renderList() {
+      listEl.innerHTML = '';
+      playlist.forEach((tr, i) => {
+        const d = document.createElement('div');
+        d.className = 'sp-item' + (!isLiveStream && i === curIdx ? ' active' : '');
+        d.innerHTML = `<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${!isLiveStream && i === curIdx && !audio.paused ? '▶ ' : ''}${tr.title} — <small>${tr.artist}</small></span><span>♪</span>`;
+        d.onclick = () => {
+          document.querySelectorAll('.sp-radios .btn').forEach(b => b.classList.remove('active'));
+          loadTrack(i, true);
+        };
+        listEl.appendChild(d);
+      });
+    }
+
+    function loadTrack(idx, autoPlay) {
+      isLiveStream = false;
+      curIdx = idx;
+      const tr = playlist[curIdx];
+      if (!tr) return;
+      audio.src = tr.url;
+      titleEl.textContent = tr.title;
+      artistEl.textContent = tr.artist;
+      if (tr.cover) imgEl.src = tr.cover;
+      if (autoPlay) {
+        audio.play();
+        playBtn.textContent = '⏸';
+      }
+      renderList();
+    }
+
+    // Кнопки бесконечных 24/7 потоков (Phonk, Synthwave, Lo-Fi)
+    document.querySelectorAll('.sp-radios .btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.sp-radios .btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        isLiveStream = true;
+        audio.src = btn.dataset.stream;
+        titleEl.textContent = btn.dataset.t;
+        artistEl.textContent = btn.dataset.a;
+        durEl.textContent = 'LIVE';
+        audio.play();
+        playBtn.textContent = '⏸';
+        renderList();
+      };
+    });
+
+    document.getElementById('sp-sform').onsubmit = e => {
+      e.preventDefault();
+      const q = document.getElementById('sp-sinp').value.trim();
+      if (q) searchRealMusic(q);
+    };
+
+    playBtn.onclick = () => {
+      if (!audio.src && playlist[0]) loadTrack(0, true);
+      else if (audio.paused) { audio.play(); playBtn.textContent = '⏸'; }
+      else { audio.pause(); playBtn.textContent = '▶'; }
+      renderList();
+    };
+
+    document.getElementById('sp-next').onclick = () => {
+      if (playlist.length) loadTrack((curIdx + 1) % playlist.length, true);
+    };
+    document.getElementById('sp-prev').onclick = () => {
+      if (playlist.length) loadTrack((curIdx - 1 + playlist.length) % playlist.length, true);
+    };
+
+    audio.ontimeupdate = () => {
+      curEl.textContent = fmt(audio.currentTime);
+      if (isLiveStream || !isFinite(audio.duration)) {
+        durEl.textContent = 'LIVE';
+        seekEl.value = 100;
+      } else {
+        durEl.textContent = fmt(audio.duration);
+        seekEl.value = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+      }
+    };
+
+    seekEl.oninput = e => {
+      if (!isLiveStream && isFinite(audio.duration)) {
+        audio.currentTime = (e.target.value / 100) * audio.duration;
+      }
+    };
+
+    document.getElementById('sp-vol').oninput = e => { audio.volume = parseFloat(e.target.value); };
+    audio.onended = () => { if (!isLiveStream && playlist.length) loadTrack((curIdx + 1) % playlist.length, true); };
+
+    // Добавление своих MP3 с ПК
+    document.getElementById('sp-file').onchange = e => {
+      const files = Array.from(e.target.files);
+      files.forEach(f => {
+        playlist.unshift({
+          title: f.name.replace(/\.[^/.]+$/, ''),
+          artist: 'Локальный MP3 файл',
+          url: URL.createObjectURL(f),
+          cover: 'https://favicon.yandex.net/favicon/v2/https://open.spotify.com?size=120'
+        });
+      });
+      if (files.length) loadTrack(0, true);
+    };
+
+    // Стартовая подборка реального фонка при открытии
+    searchRealMusic('DVRST Kordhell Phonk');
+
+    // 6. ЗАДАЧИ И ЗАМЕТКИ
+    let todos = JSON.parse(localStorage.getItem('m_todos')) || [{ text: 'Проверить Spotify поиск и погоду', done: false }];
+    function drawTodos() {
+      const ul = document.getElementById('todo-l'); ul.innerHTML = '';
+      todos.forEach((t, i) => {
+        const li = document.createElement('li'); li.className = 'todo-item' + (t.done ? ' done' : '');
+        li.innerHTML = `<span>${t.text}</span><b style="cursor:pointer; padding:0 4px;">✕</b>`;
+        li.querySelector('span').onclick = () => { t.done = !t.done; localStorage.setItem('m_todos', JSON.stringify(todos)); drawTodos(); };
+        li.querySelector('b').onclick = () => { todos.splice(i,1); localStorage.setItem('m_todos', JSON.stringify(todos)); drawTodos(); };
+        ul.appendChild(li);
+      });
+      document.getElementById('todo-cnt').textContent = todos.filter(x => !x.done).length + ' активных';
+    }
+    document.getElementById('todo-f').onsubmit = e => {
+      e.preventDefault(); const inp = document.getElementById('todo-i');
+      if (inp.value.trim()) { todos.unshift({ text: inp.value.trim(), done: false }); inp.value = ''; localStorage.setItem('m_todos', JSON.stringify(todos)); drawTodos(); }
+    };
+    drawTodos();
+
+    const notes = document.getElementById('v-notes');
+    notes.value = localStorage.getItem('m_notes') || '';
+    notes.oninput = () => localStorage.setItem('m_notes', notes.value);
+    document.getElementById('t-todo').onclick = () => { document.getElementById('v-todo').style.display='block'; notes.style.display='none'; document.getElementById('t-todo').classList.add('active'); document.getElementById('t-notes').classList.remove('active'); };
+    document.getElementById('t-notes').onclick = () => { document.getElementById('v-todo').style.display='none'; notes.style.display='block'; document.getElementById('t-notes').classList.add('active'); document.getElementById('t-todo').classList.remove('active'); };
+
+    // 7. НАСТРОЙКИ И ФОН
+    const cfgModal = document.getElementById('cfg-modal');
+    document.getElementById('cfg-open').onclick = () => cfgModal.classList.add('open');
+    document.getElementById('cfg-close').onclick = () => cfgModal.classList.remove('open');
+    function setTheme(th) {
+      document.body.className = th === 'oled' ? 'theme-oled' : th === 'light' ? 'theme-light' : '';
+      localStorage.setItem('m_theme', th);
+    }
+    setTheme(localStorage.getItem('m_theme') || 'default');
+    document.querySelectorAll('[data-th]').forEach(b => b.onclick = () => setTheme(b.dataset.th));
+
+    const cvs = document.getElementById('bg-canvas'), ctx = cvs.getContext('2d');
+    let bgMode = localStorage.getItem('m_bg') || 'particles', pts = [];
+    function resize() { cvs.width = innerWidth; cvs.height = innerHeight; pts = Array.from({length: 55}, () => ({ x: Math.random()*cvs.width, y: Math.random()*cvs.height, vx: (Math.random()-0.5)*0.6, vy: (Math.random()-0.5)*0.6 })); }
+    window.onresize = resize; resize();
+    document.querySelectorAll('[data-bg]').forEach(b => b.onclick = () => { bgMode = b.dataset.bg; localStorage.setItem('m_bg', bgMode); });
+
+    function anim() {
+      ctx.clearRect(0, 0, cvs.width, cvs.height);
+      ctx.fillStyle = document.body.classList.contains('theme-light') ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.35)';
+      if (bgMode === 'particles') {
+        pts.forEach(p => {
+          p.x = (p.x + p.vx + cvs.width) % cvs.width; p.y = (p.y + p.vy + cvs.height) % cvs.height;
+          ctx.beginPath(); ctx.arc(p.x, p.y, 1.6, 0, Math.PI*2); ctx.fill();
+        });
+      } else if (bgMode === 'rain') {
+        pts.forEach(p => { p.y = (p.y + 4) % cvs.height; ctx.fillRect(p.x, p.y, 1, 12); });
+      }
+      requestAnimationFrame(anim);
+    }
+    anim();
+  </script>
+</body>
+</html>
